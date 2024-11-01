@@ -1,11 +1,15 @@
 import os
+import json
 import streamlit as st
 import google.generativeai as genai
+
 from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 from langchain_google_genai import ChatGoogleGenerativeAI
-import json
+
+
+from datetime import datetime
 
 
 load_dotenv()
@@ -18,7 +22,7 @@ def find_calorie(food_item):
     """Generate a chain to find calorie content of food items."""
     template = """What is the calorie content of {food_item}? I just want the numbers and no text. 
     If there are multiple foods, give the calories of each and the total as well, with the foods bulleted 
-    one below the other."""
+    one below the other. If time is mentioned ignore it just mentiopn the calorie"""
     
     prompt = PromptTemplate(template=template, input_variables=["food_item"])
 
@@ -33,17 +37,21 @@ def find_calorie(food_item):
 
 
 def extract_calories(food_item):
-    """Extract food items and their calorie counts from the result as a dictionary."""
-    template = """What is the calorie content of {food_item}? I want the name of the food and calorie content in the form 
-    of a dictionary. Example: [{{"item": "Apple", "calories": 95}}, {{"item": "Banana", "calories": 105}}]"""  # Escaped braces
 
-    prompt = PromptTemplate(template=template, input_variables=["food_item"])
+    date = datetime.now().date()
+
+    template = """What is the calorie content of {food_item} just the food ignore the time?I want the name of the food and 
+    calorie content in the form of a dictionary.Todays date is {date}, change the date accoding to the context with respect to 
+    todays date and write it in DD/MM/YYYY format Example: [{{"date":"DD/MM/YYYY", "item": "Apple", "calories": 95}}, 
+    {{"date":"DD/MM/YYYY", "item": "Banana", "calories": 105}}]."""
+
+    prompt = PromptTemplate(template=template, input_variables=["food_item","date"])
 
     try:
         model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
 
         llm_chain = prompt | model
-        result = llm_chain.invoke({"food_item": food_item})
+        result = llm_chain.invoke({"food_item": food_item, "date": date})
         print("Model run successful")
         
         # Print the result for debugging
@@ -75,9 +83,9 @@ def main():
         if food_input:
             dict_result = extract_calories(food_input)
             if dict_result:
-                # Append the result to the consumed_foods list
-                consumed_foods.extend(dict_result)  # Add all items to the consumed_foods list
+                consumed_foods.extend(dict_result)  
                 st.success(f"Added: {dict_result}")
+
             else:
                 st.warning("Could not retrieve calorie information.")
         else:
@@ -88,10 +96,7 @@ def main():
     if consumed_foods:
         total_calories = sum(food['calories'] for food in consumed_foods)
         
-        # Create a list of dictionaries for consumed foods and their calorie counts
-        data = [{"Food Item": food['item'], "Calories": food['calories']} for food in consumed_foods]
-        
-        # Append the total to the list as a dictionary
+        data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} for food in consumed_foods]
         data.append({"Food Item": "Total", "Calories": total_calories})
         
         # Display the data as a table
