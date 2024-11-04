@@ -21,6 +21,7 @@ collection = db["calorie"]
 
 
 
+# To find the calorie before eating
 def find_calorie(food_item):
     template = """What is the calorie content of {food_item}? I just want the numbers and no text. 
     If there are multiple foods, give the calories of each and the total as well, with the foods bulleted 
@@ -32,6 +33,7 @@ def find_calorie(food_item):
         model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
         llm_chain = LLMChain(llm=model, prompt=prompt)
         return llm_chain.run(food_item=food_item)
+    
     except Exception as e:
         st.error(f"Error generating calorie content: {e}")
         return None
@@ -39,9 +41,11 @@ def find_calorie(food_item):
 
 
 
+
+# To find and add in DB
 def extract_calories(food_item):
     date = datetime.now().strftime("%d/%m/%Y")
-    print(date)
+    
     
     template = """What is the calorie content of {food_item} just the food ignore the time? I want the name of the food and 
     calorie content in the form of a dictionary. Today's date is {date}, change the date according to the context with respect to 
@@ -55,19 +59,25 @@ def extract_calories(food_item):
         llm_chain = LLMChain(llm=model, prompt=prompt)
         result = llm_chain.run(food_item=food_item, date=date)
 
-        # Display raw AI response for debugging
+
         st.write("Raw AI Response:", result)
 
-        # Parse JSON response from AI
+
         food_data = json.loads(result)
         return food_data
+    
     except json.JSONDecodeError:
         st.error("Error parsing AI response. Ensure the response is in the correct JSON format.")
+
     except Exception as e:
         st.error(f"Error during model execution: {e}")
     return None
 
-# Define the function to insert consumed food data into MongoDB
+
+
+
+
+# Insert to DB
 def add_to_mongo(food_data):
     try:
         collection.insert_many(food_data)
@@ -75,53 +85,230 @@ def add_to_mongo(food_data):
     except Exception as e:
         st.error(f"Error inserting data into MongoDB: {e}")
 
-# Retrieve consumed foods from MongoDB
+
+
+
+
+
+# Retrieve from DB
 def get_consumed_foods():
     try:
-        return list(collection.find({}, {"_id": 0}))  # Exclude MongoDB’s default '_id' field
+        today = datetime.now().strftime("%d/%m/%Y")
+        print(today)
+        return list(collection.find({"date": today}, {"_id": 0})) 
+    
     except Exception as e:
         st.error(f"Error retrieving data from MongoDB: {e}")
         return []
 
-# Define the nutritionist application logic
+
+
+
+# Calorie needs calculator
+def calculate_daily_calories(weight, height, age, gender, activity_multiplier):
+    if gender.lower() == 'male':
+        bmr = 88.362 + (13.397 * weight) + (4.799 * height) - (5.677 * age)
+    elif gender.lower() == 'female':
+        bmr = 447.593 + (9.247 * weight) + (3.098 * height) - (4.330 * age)
+    else:
+        st.error("Invalid gender input. Please enter 'male' or 'female'.")
+        return None
+    
+    tdee = bmr * activity_multiplier
+    return tdee
+
+# # nutritionist Tab
+# def nutritionist():
+#     st.title("Personal AI Nutritionist")
+#     food_input = st.text_input("Enter the food and quantity:").strip()
+
+#     if st.button("Find"):
+#         if food_input:
+#             result = find_calorie(food_input)
+#             if result:
+#                 st.write("Calorie Content:", result)
+#             else:
+#                 st.warning("Could not retrieve calorie information.")
+#         else:
+#             st.warning("Please enter a valid food item.")
+
+#     if st.button("Ate"):
+#         if food_input:
+#             dict_result = extract_calories(food_input)
+#             if dict_result:
+#                 add_to_mongo(dict_result)
+#                 st.success(f"Added: {dict_result}")
+#             else:
+#                 st.warning("Could not retrieve calorie information.")
+#         else:
+#             st.warning("Please enter a valid food item.")
+
+#     # Display consumed foods in a table
+#     consumed_foods = get_consumed_foods()
+#     col1, col2 = st.columns(2)
+    
+#     # Consumed foods table
+#     with col1:
+#         st.subheader("Today's Consumed Foods")
+#         if consumed_foods:
+#             total_calories = sum(food['calories'] for food in consumed_foods)
+#             data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} 
+#                     for food in consumed_foods]
+#             data.append({"Date": "", "Food Item": "Total", "Calories": total_calories})
+#             st.table(data)
+#         else:
+#             st.write("No food items consumed yet.")
+
+#     # Daily calorie needs calculation
+#     with col2:
+#         st.subheader("Daily Calorie Needs Calculator")
+#         weight = st.number_input("Weight (kg)", min_value=0.0)
+#         height = st.number_input("Height (cm)", min_value=0.0)
+#         age = st.number_input("Age", min_value=0)
+#         gender = st.selectbox("Gender", ["male", "female"])
+
+#         # Activity level dropdown with multiplier values
+#         activity_level = st.selectbox(
+#             "Activity Level",
+#             options=[
+#                 ("Sedentary (little or no exercise)", 1.2),
+#                 ("Lightly active (light exercise/sports 1-3 days/week)", 1.375),
+#                 ("Moderately active (moderate exercise/sports 3-5 days/week)", 1.55),
+#                 ("Very active (hard exercise/sports 6-7 days a week)", 1.725),
+#                 ("Super active (very hard exercise & physical job)", 1.9)
+#             ],
+#             format_func=lambda x: x[0]
+#         )
+        
+#         if st.button("Calculate Daily Calories"):
+#             tdee = calculate_daily_calories(weight, height, age, gender, activity_level[1])
+#             if tdee:
+#                 st.write(f"Estimated Daily Caloric Needs: {tdee:.2f} calories")
+
+
+
+# Nutritionist Tab with Improved UI
 def nutritionist():
     st.title("Personal AI Nutritionist")
-    food_input = st.text_input("Enter the food and quantity:").strip()
 
-    if st.button("Find"):
-        if food_input:
-            result = find_calorie(food_input)
-            if result:
-                st.write("Calorie Content:", result)
-            else:
-                st.warning("Could not retrieve calorie information.")
-        else:
-            st.warning("Please enter a valid food item.")
+    # Define the layout with columns
+    col1, spacer, col2 = st.columns([5, 0.3, 2], gap="large")  # col1 takes more space for center layout
 
-    if st.button("Ate"):
-        if food_input:
-            dict_result = extract_calories(food_input)
-            if dict_result:
-                add_to_mongo(dict_result)
-                st.success(f"Added: {dict_result}")
+    # Food input and calorie information in the main column (col1)
+    with col1:
+        with st.container():
+            # Center-aligned text input and buttons
+            st.subheader("Enter Food Item")
+            food_input = st.text_input("Enter the food and quantity:", placeholder="e.g., 1 apple, 200g rice").strip()
+
+            col_left, col_right = st.columns([1, 1])
+            with col_left:
+                if st.button("Find"):
+                    if food_input:
+                        result = find_calorie(food_input)
+                        if result:
+                            st.write("Calorie Content:", result)
+                        else:
+                            st.warning("Could not retrieve calorie information.")
+                    else:
+                        st.warning("Please enter a valid food item.")
+            with col_right:
+                if st.button("Ate"):
+                    if food_input:
+                        dict_result = extract_calories(food_input)
+                        if dict_result:
+                            add_to_mongo(dict_result)
+                            st.success(f"Added: {dict_result}")
+                        else:
+                            st.warning("Could not retrieve calorie information.")
+                    else:
+                        st.warning("Please enter a valid food item.")
+
+            # Display consumed foods in a table
+            st.subheader("Today's Consumed Foods")
+            consumed_foods = get_consumed_foods()
+            if consumed_foods:
+                total_calories = sum(food['calories'] for food in consumed_foods)
+                data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} 
+                        for food in consumed_foods]
+                data.append({"Date": "", "Food Item": "Total", "Calories": total_calories})
+                st.table(data)
             else:
-                st.warning("Could not retrieve calorie information.")
-        else:
-            st.warning("Please enter a valid food item.")
+                st.write("No food items consumed yet.")
+
+    # Daily calorie needs calculation in the side column (col2)
+    with col2:
+        st.subheader("Calorie Calculator")
+        weight = st.number_input("Weight (kg)", min_value=0.0)
+        height = st.number_input("Height (cm)", min_value=0.0)
+        age = st.number_input("Age", min_value=0)
+        gender = st.selectbox("Gender", ["male", "female"])
+
+        # Activity level dropdown with multiplier values
+        activity_level = st.selectbox(
+            "Activity Level",
+            options=[
+                ("Sedentary (little or no exercise)", 1.2),
+                ("Lightly active (light exercise/sports 1-3 days/week)", 1.375),
+                ("Moderately active (moderate exercise/sports 3-5 days/week)", 1.55),
+                ("Very active (hard exercise/sports 6-7 days a week)", 1.725),
+                ("Super active (very hard exercise & physical job)", 1.9)
+            ],
+            format_func=lambda x: x[0]
+        )
+
+        if st.button("Calculate Daily Calories"):
+            tdee = calculate_daily_calories(weight, height, age, gender, activity_level[1])
+            if tdee:
+                st.write(f"Estimated Daily Caloric Needs: {tdee:.2f} calories")
+
+
+
+
+# nutritionist Tab
+# def nutritionist():
+
+#     st.title("Personal AI Nutritionist")
+#     food_input = st.text_input("Enter the food and quantity:").strip()
     
-    # Display consumed foods in a table
-    consumed_foods = get_consumed_foods()
-    if consumed_foods:
-        total_calories = sum(food['calories'] for food in consumed_foods)
-        data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} 
-                for food in consumed_foods]
-        data.append({"Date": "", "Food Item": "Total", "Calories": total_calories})
+#     if st.button("Find"):
+#         if food_input:
+#             result = find_calorie(food_input)
+#             if result:
+#                 st.write("Calorie Content:", result)
+#             else:
+#                 st.warning("Could not retrieve calorie information.")
+#         else:
+#             st.warning("Please enter a valid food item.")
 
-        st.table(data)
-    else:
-        st.write("No food items consumed yet.")
 
-# Define an empty dashboard page
+#     if st.button("Ate"):
+#         if food_input:
+#             dict_result = extract_calories(food_input)
+#             if dict_result:
+#                 add_to_mongo(dict_result)
+#                 st.success(f"Added: {dict_result}")
+#             else:
+#                 st.warning("Could not retrieve calorie information.")
+#         else:
+#             st.warning("Please enter a valid food item.")
+    
+#     # Display consumed foods in a table
+#     consumed_foods = get_consumed_foods()
+#     if consumed_foods:
+#         total_calories = sum(food['calories'] for food in consumed_foods)
+#         data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} 
+#                 for food in consumed_foods]
+#         data.append({"Date": "", "Food Item": "Total", "Calories": total_calories})
+
+#         st.table(data)
+#     else:
+#         st.write("No food items consumed yet.")
+
+
+
+
+# Dashboard Page
 def dashboard():
     st.title("Dashboard")
     st.write("This is an empty dashboard page.")
