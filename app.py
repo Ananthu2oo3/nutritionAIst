@@ -1,6 +1,8 @@
 import os
 import json
+import pandas as pd
 import streamlit as st
+import plotly.graph_objects as go
 import google.generativeai as genai
 
 from datetime import datetime
@@ -117,201 +119,200 @@ def calculate_daily_calories(weight, height, age, gender, activity_multiplier):
     tdee = bmr * activity_multiplier
     return tdee
 
-# # nutritionist Tab
-# def nutritionist():
-#     st.title("Personal AI Nutritionist")
-#     food_input = st.text_input("Enter the food and quantity:").strip()
-
-#     if st.button("Find"):
-#         if food_input:
-#             result = find_calorie(food_input)
-#             if result:
-#                 st.write("Calorie Content:", result)
-#             else:
-#                 st.warning("Could not retrieve calorie information.")
-#         else:
-#             st.warning("Please enter a valid food item.")
-
-#     if st.button("Ate"):
-#         if food_input:
-#             dict_result = extract_calories(food_input)
-#             if dict_result:
-#                 add_to_mongo(dict_result)
-#                 st.success(f"Added: {dict_result}")
-#             else:
-#                 st.warning("Could not retrieve calorie information.")
-#         else:
-#             st.warning("Please enter a valid food item.")
-
-#     # Display consumed foods in a table
-#     consumed_foods = get_consumed_foods()
-#     col1, col2 = st.columns(2)
-    
-#     # Consumed foods table
-#     with col1:
-#         st.subheader("Today's Consumed Foods")
-#         if consumed_foods:
-#             total_calories = sum(food['calories'] for food in consumed_foods)
-#             data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} 
-#                     for food in consumed_foods]
-#             data.append({"Date": "", "Food Item": "Total", "Calories": total_calories})
-#             st.table(data)
-#         else:
-#             st.write("No food items consumed yet.")
-
-#     # Daily calorie needs calculation
-#     with col2:
-#         st.subheader("Daily Calorie Needs Calculator")
-#         weight = st.number_input("Weight (kg)", min_value=0.0)
-#         height = st.number_input("Height (cm)", min_value=0.0)
-#         age = st.number_input("Age", min_value=0)
-#         gender = st.selectbox("Gender", ["male", "female"])
-
-#         # Activity level dropdown with multiplier values
-#         activity_level = st.selectbox(
-#             "Activity Level",
-#             options=[
-#                 ("Sedentary (little or no exercise)", 1.2),
-#                 ("Lightly active (light exercise/sports 1-3 days/week)", 1.375),
-#                 ("Moderately active (moderate exercise/sports 3-5 days/week)", 1.55),
-#                 ("Very active (hard exercise/sports 6-7 days a week)", 1.725),
-#                 ("Super active (very hard exercise & physical job)", 1.9)
-#             ],
-#             format_func=lambda x: x[0]
-#         )
-        
-#         if st.button("Calculate Daily Calories"):
-#             tdee = calculate_daily_calories(weight, height, age, gender, activity_level[1])
-#             if tdee:
-#                 st.write(f"Estimated Daily Caloric Needs: {tdee:.2f} calories")
 
 
 
-# Nutritionist Tab with Improved UI
+
+# Nutritionist Tab 
 def nutritionist():
     st.title("Personal AI Nutritionist")
 
     # Define the layout with columns
-    col1, spacer, col2 = st.columns([5, 0.3, 2], gap="large")  # col1 takes more space for center layout
+    # col1 = st.columns([5], gap="large")  # col1 takes more space for center layout
 
     # Food input and calorie information in the main column (col1)
+    # with col1:
+    with st.container():
+        # Center-aligned text input and buttons
+        st.subheader("Enter Food Item")
+        food_input = st.text_input("Enter the food and quantity:", placeholder="e.g., 1 apple, 200g rice").strip()
+
+        col_left, col_right = st.columns([1, 1])
+        with col_left:
+            if st.button("Find"):
+                if food_input:
+                    result = find_calorie(food_input)
+                    if result:
+                        st.write("Calorie Content:", result)
+                    else:
+                        st.warning("Could not retrieve calorie information.")
+                else:
+                    st.warning("Please enter a valid food item.")
+        with col_right:
+            if st.button("Ate"):
+                if food_input:
+                    dict_result = extract_calories(food_input)
+                    if dict_result:
+                        add_to_mongo(dict_result)
+                        st.success(f"Added: {dict_result}")
+                    else:
+                        st.warning("Could not retrieve calorie information.")
+                else:
+                    st.warning("Please enter a valid food item.")
+
+        # Display consumed foods in a table
+        st.subheader("Today's Consumed Foods")
+        consumed_foods = get_consumed_foods()
+        if consumed_foods:
+            total_calories = sum(food['calories'] for food in consumed_foods)
+            data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} 
+                    for food in consumed_foods]
+            data.append({"Date": "", "Food Item": "Total", "Calories": total_calories})
+            st.table(data)
+        else:
+            st.write("No food items consumed yet.")
+
+    # # Daily calorie needs calculation in the side column (col2)
+    # with col2:
+    #     st.subheader("Calorie Calculator")
+    #     weight = st.number_input("Weight (kg)", min_value=0.0)
+    #     height = st.number_input("Height (cm)", min_value=0.0)
+    #     age = st.number_input("Age", min_value=0)
+    #     gender = st.selectbox("Gender", ["male", "female"])
+
+    #     # Activity level dropdown with multiplier values
+    #     activity_level = st.selectbox(
+    #         "Activity Level",
+    #         options=[
+    #             ("Sedentary (little or no exercise)", 1.2),
+    #             ("Lightly active (light exercise/sports 1-3 days/week)", 1.375),
+    #             ("Moderately active (moderate exercise/sports 3-5 days/week)", 1.55),
+    #             ("Very active (hard exercise/sports 6-7 days a week)", 1.725),
+    #             ("Super active (very hard exercise & physical job)", 1.9)
+    #         ],
+    #         format_func=lambda x: x[0]
+    #     )
+
+    #     if st.button("Calculate Daily Calories"):
+    #         tdee = calculate_daily_calories(weight, height, age, gender, activity_level[1])
+    #         if tdee:
+    #             st.write(f"Estimated Daily Caloric Needs: {tdee:.2f} calories")
+
+
+
+
+
+
+def fetch_monthly_calorie_data():
+    try:
+        today = datetime.now()
+        start_of_month = today.replace(day=1)
+        records = list(collection.find(
+            {"date": {"$gte": start_of_month.strftime("%d/%m/%Y"), "$lte": today.strftime("%d/%m/%Y")}},
+            {"_id": 0}
+        ))
+        return records
+    except Exception as e:
+        st.error(f"Error retrieving monthly data from MongoDB: {e}")
+        return []
+
+
+
+
+# Calculate total calories for each day in the month
+def calculate_daily_calorie_totals(records):
+    daily_calories = {}
+    for record in records:
+        date = record['date']
+        calories = record['calories']
+        daily_calories[date] = daily_calories.get(date, 0) + calories
+    return daily_calories
+
+
+
+
+# Function to calculate daily calorie limit based on BMR and activity level
+def calculate_daily_calorie_limit(weight, height, activity_level):
+    # Basal Metabolic Rate (BMR) calculation using Mifflin-St Jeor Equation
+    bmr = 10 * weight + 6.25 * height - 5 * 25 + 5  # Assuming age 25, male; adjust as needed
+    activity_multipliers = {
+        "Sedentary": 1.2,
+        "Lightly active": 1.375,
+        "Moderately active": 1.55,
+        "Very active": 1.725,
+        "Super active": 1.9
+    }
+    return int(bmr * activity_multipliers.get(activity_level, 1.2))
+
+
+
+
+# Dashboard Tab
+def dashboard():
+    st.title("Calorie Consumption Dashboard")
+
+    # Mock user profile for demo purposes
+    user_profile = {
+        "height": 170,
+        "weight": 70,
+        "activity_level": "Moderately active"
+    }
+
+    # Editable User Profile Section
+    st.subheader("User Profile")
+    col1, col2, col3 = st.columns(3)
     with col1:
-        with st.container():
-            # Center-aligned text input and buttons
-            st.subheader("Enter Food Item")
-            food_input = st.text_input("Enter the food and quantity:", placeholder="e.g., 1 apple, 200g rice").strip()
-
-            col_left, col_right = st.columns([1, 1])
-            with col_left:
-                if st.button("Find"):
-                    if food_input:
-                        result = find_calorie(food_input)
-                        if result:
-                            st.write("Calorie Content:", result)
-                        else:
-                            st.warning("Could not retrieve calorie information.")
-                    else:
-                        st.warning("Please enter a valid food item.")
-            with col_right:
-                if st.button("Ate"):
-                    if food_input:
-                        dict_result = extract_calories(food_input)
-                        if dict_result:
-                            add_to_mongo(dict_result)
-                            st.success(f"Added: {dict_result}")
-                        else:
-                            st.warning("Could not retrieve calorie information.")
-                    else:
-                        st.warning("Please enter a valid food item.")
-
-            # Display consumed foods in a table
-            st.subheader("Today's Consumed Foods")
-            consumed_foods = get_consumed_foods()
-            if consumed_foods:
-                total_calories = sum(food['calories'] for food in consumed_foods)
-                data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} 
-                        for food in consumed_foods]
-                data.append({"Date": "", "Food Item": "Total", "Calories": total_calories})
-                st.table(data)
-            else:
-                st.write("No food items consumed yet.")
-
-    # Daily calorie needs calculation in the side column (col2)
+        user_profile['height'] = st.number_input("Height (cm)", value=user_profile['height'])
     with col2:
-        st.subheader("Calorie Calculator")
-        weight = st.number_input("Weight (kg)", min_value=0.0)
-        height = st.number_input("Height (cm)", min_value=0.0)
-        age = st.number_input("Age", min_value=0)
-        gender = st.selectbox("Gender", ["male", "female"])
-
-        # Activity level dropdown with multiplier values
-        activity_level = st.selectbox(
+        user_profile['weight'] = st.number_input("Weight (kg)", value=user_profile['weight'])
+    with col3:
+        user_profile['activity_level'] = st.selectbox(
             "Activity Level",
-            options=[
-                ("Sedentary (little or no exercise)", 1.2),
-                ("Lightly active (light exercise/sports 1-3 days/week)", 1.375),
-                ("Moderately active (moderate exercise/sports 3-5 days/week)", 1.55),
-                ("Very active (hard exercise/sports 6-7 days a week)", 1.725),
-                ("Super active (very hard exercise & physical job)", 1.9)
-            ],
-            format_func=lambda x: x[0]
+            ["Sedentary", "Lightly active", "Moderately active", "Very active", "Super active"],
+            index=["Sedentary", "Lightly active", "Moderately active", "Very active", "Super active"].index(user_profile['activity_level'])
         )
 
-        if st.button("Calculate Daily Calories"):
-            tdee = calculate_daily_calories(weight, height, age, gender, activity_level[1])
-            if tdee:
-                st.write(f"Estimated Daily Caloric Needs: {tdee:.2f} calories")
+    # Calculate calorie limit based on user inputs
+    user_profile['calorie_limit'] = calculate_daily_calorie_limit(
+        weight=user_profile['weight'],
+        height=user_profile['height'],
+        activity_level=user_profile['activity_level']
+    )
 
+    # Display calculated daily calorie limit
+    st.write(f"**Calculated Daily Calorie Limit:** {user_profile['calorie_limit']} calories")
 
+    # Calorie Consumption for the Current Month
+    st.subheader("Calorie Consumption This Month")
+    monthly_records = fetch_monthly_calorie_data()
+    daily_totals = calculate_daily_calorie_totals(monthly_records)
+    monthly_data_df = pd.DataFrame.from_dict(daily_totals, orient='index', columns=['Calories'])
+    st.line_chart(monthly_data_df)
 
+    # Today's Calorie Consumption Donut Chart
+    calories_consumed_today = daily_totals.get(datetime.now().strftime("%d/%m/%Y"), 0)
+    calories_remaining_today = max(0, user_profile['calorie_limit'] - calories_consumed_today)
+    st.subheader(f"Today's Calorie Consumption ({calories_consumed_today}/{user_profile['calorie_limit']} calories)")
+    fig = go.Figure(data=[go.Pie(
+        labels=['Calories Consumed', 'Calories Remaining'],
+        values=[calories_consumed_today, calories_remaining_today],
+        hole=0.7
+    )])
+    fig.update_layout(showlegend=True, title_text="Calorie Consumption vs. Limit")
+    st.plotly_chart(fig)
 
-# nutritionist Tab
-# def nutritionist():
+    # Streak Calculation for Days within Calorie Limit
+    st.subheader("Calorie Limit Streak")
+    streak_days = 0
+    is_streak_active = True
+    for date in sorted(daily_totals.keys(), key=lambda x: datetime.strptime(x, "%d/%m/%Y"), reverse=True):
+        if daily_totals[date] <= user_profile['calorie_limit']:
+            if is_streak_active:
+                streak_days += 1
+        else:
+            is_streak_active = False
+    st.write(f"You have stayed within your calorie limit for {streak_days} day(s) in a row.")
 
-#     st.title("Personal AI Nutritionist")
-#     food_input = st.text_input("Enter the food and quantity:").strip()
-    
-#     if st.button("Find"):
-#         if food_input:
-#             result = find_calorie(food_input)
-#             if result:
-#                 st.write("Calorie Content:", result)
-#             else:
-#                 st.warning("Could not retrieve calorie information.")
-#         else:
-#             st.warning("Please enter a valid food item.")
-
-
-#     if st.button("Ate"):
-#         if food_input:
-#             dict_result = extract_calories(food_input)
-#             if dict_result:
-#                 add_to_mongo(dict_result)
-#                 st.success(f"Added: {dict_result}")
-#             else:
-#                 st.warning("Could not retrieve calorie information.")
-#         else:
-#             st.warning("Please enter a valid food item.")
-    
-#     # Display consumed foods in a table
-#     consumed_foods = get_consumed_foods()
-#     if consumed_foods:
-#         total_calories = sum(food['calories'] for food in consumed_foods)
-#         data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} 
-#                 for food in consumed_foods]
-#         data.append({"Date": "", "Food Item": "Total", "Calories": total_calories})
-
-#         st.table(data)
-#     else:
-#         st.write("No food items consumed yet.")
-
-
-
-
-# Dashboard Page
-def dashboard():
-    st.title("Dashboard")
-    st.write("This is an empty dashboard page.")
 
 # Main application function
 def main():

@@ -6,3 +6,7 @@ langchain_google_genai
 langchain_community
 panel==1.5.3
 pymongo==4.9.1
+plotly
+opencv-python-headless 
+pytesseract
+matplotlib
