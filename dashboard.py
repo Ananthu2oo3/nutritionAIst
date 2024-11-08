@@ -1,21 +1,17 @@
+# dashboard.py
 import os
-import json
 import streamlit as st
+import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
-import pandas as pd
-from dotenv import load_dotenv
 from pymongo import MongoClient
 
-# Load environment variables
-load_dotenv()
+# MongoDB connection
+client = MongoClient(os.getenv('MONGO_CLIENT'))
+db = client[os.getenv('DATABASE')]
+collection = db[os.getenv('COLLECTION')]
+# Helper Functions
 
-# MongoDB client setup
-client = MongoClient("mongodb://localhost:27017")
-db = client["nutritionAIst"]
-collection = db["calorie"]
-
-# Function to fetch monthly calorie consumption data
 def fetch_monthly_calorie_data():
     try:
         today = datetime.now()
@@ -29,7 +25,7 @@ def fetch_monthly_calorie_data():
         st.error(f"Error retrieving monthly data from MongoDB: {e}")
         return []
 
-# Calculate total calories for each day in the month
+
 def calculate_daily_calorie_totals(records):
     daily_calories = {}
     for record in records:
@@ -38,10 +34,9 @@ def calculate_daily_calorie_totals(records):
         daily_calories[date] = daily_calories.get(date, 0) + calories
     return daily_calories
 
-# Function to calculate daily calorie limit based on BMR and activity level
+
 def calculate_daily_calorie_limit(weight, height, activity_level):
-    # Basal Metabolic Rate (BMR) calculation using Mifflin-St Jeor Equation
-    bmr = 10 * weight + 6.25 * height - 5 * 25 + 5  # Assuming age 25, male; adjust as needed
+    bmr = 10 * weight + 6.25 * height - 5 * 25 + 5
     activity_multipliers = {
         "Sedentary": 1.2,
         "Lightly active": 1.375,
@@ -51,18 +46,18 @@ def calculate_daily_calorie_limit(weight, height, activity_level):
     }
     return int(bmr * activity_multipliers.get(activity_level, 1.2))
 
-# Dashboard Tab
-def render_dashboard():
+
+# Dashboard function
+
+def dashboard():
     st.title("Calorie Consumption Dashboard")
 
-    # Mock user profile for demo purposes
     user_profile = {
         "height": 170,
         "weight": 70,
         "activity_level": "Moderately active"
     }
 
-    # Editable User Profile Section
     st.subheader("User Profile")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -76,17 +71,13 @@ def render_dashboard():
             index=["Sedentary", "Lightly active", "Moderately active", "Very active", "Super active"].index(user_profile['activity_level'])
         )
 
-    # Calculate calorie limit based on user inputs
     user_profile['calorie_limit'] = calculate_daily_calorie_limit(
         weight=user_profile['weight'],
         height=user_profile['height'],
         activity_level=user_profile['activity_level']
     )
-
-    # Display calculated daily calorie limit
     st.write(f"**Calculated Daily Calorie Limit:** {user_profile['calorie_limit']} calories")
 
-    # Calorie Consumption for the Current Month
     st.subheader("Calorie Consumption This Month")
     monthly_records = fetch_monthly_calorie_data()
     daily_totals = calculate_daily_calorie_totals(monthly_records)
@@ -105,8 +96,7 @@ def render_dashboard():
     fig.update_layout(showlegend=True, title_text="Calorie Consumption vs. Limit")
     st.plotly_chart(fig)
 
-    # Streak Calculation for Days within Calorie Limit
-    st.subheader("Calorie Limit Streak")
+    # st.subheader("Calorie Limit Streak")
     streak_days = 0
     is_streak_active = True
     for date in sorted(daily_totals.keys(), key=lambda x: datetime.strptime(x, "%d/%m/%Y"), reverse=True):
@@ -115,15 +105,4 @@ def render_dashboard():
                 streak_days += 1
         else:
             is_streak_active = False
-    st.write(f"You have stayed within your calorie limit for {streak_days} day(s) in a row.")
-
-# Main application function
-def main():
-    st.sidebar.title("Navigation")
-    option = st.sidebar.radio("Go to", ["Dashboard"])
-
-    if option == "Dashboard":
-        render_dashboard()
-
-if __name__ == "__main__":
-    main()
+    st.header(f"You have stayed within your calorie limit for {streak_days} day(s) in a row.")

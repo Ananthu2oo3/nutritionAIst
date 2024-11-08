@@ -14,9 +14,9 @@ load_dotenv()
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 # Connect to MongoDB
-client = MongoClient("mongodb://localhost:27017")
-db = client["nutritionAIst"]
-collection = db["calorie"]
+client = MongoClient(os.getenv('MONGO_CLIENT'))
+db = client[os.getenv('DATABASE')]
+collection = db[os.getenv('COLLECTION')]
 
 # Functions
 
