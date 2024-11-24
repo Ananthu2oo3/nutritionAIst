@@ -10,3 +10,6 @@ plotly
 opencv-python-headless 
 pytesseract
 matplotlib
+bcrypt
+july
+matplotlib==3.5.1

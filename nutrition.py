@@ -1,123 +1,216 @@
 import os
 import json
 import streamlit as st
-import google.generativeai as genai
-from datetime import datetime
-from dotenv import load_dotenv
 from pymongo import MongoClient
-from langchain.chains import LLMChain
+from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
 from langchain_google_genai import ChatGoogleGenerativeAI
+from datetime import datetime
 
-# Load environment variables
+
 load_dotenv()
-genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+MONGO_CLIENT = os.getenv("MONGO_CLIENT")
+DATABASE = os.getenv("DATABASE")
+FOOD_COLLECTION = os.getenv("FOOD_COLLECTION")
 
-# Connect to MongoDB
-client = MongoClient(os.getenv('MONGO_CLIENT'))
-db = client[os.getenv('DATABASE')]
-collection = db[os.getenv('COLLECTION')]
+client = MongoClient(MONGO_CLIENT)
+db = client[DATABASE]
+food_collection = db[FOOD_COLLECTION]
 
-# Functions
+
+def add_to_mongo(food_data, user_email):
+    try:
+        
+        food_data["user_email"] = user_email
+        food_collection.insert_one(food_data)
+        st.success("Food data successfully added to the database.")
+
+    except Exception as e:
+        st.error(f"Error: {e}")
+
+
+
+def get_consumed_foods(email):
+    try:
+        today = datetime.now().strftime("%d/%m/%Y")
+        # Get all documents for the user from today
+        foods = list(food_collection.find(
+            {
+                "date": today,
+                "user_email": email
+            },
+            {"_id": 0}
+        ))
+        
+
+        display_foods = []
+        for food in foods:
+            display_food = {
+                "Item": food["item"],
+                "Calories": food["calories"],
+                "Carbs": food["carbs"],
+                "Protein": food["protein"],
+                "Fat": food["fat"],
+                "Sugar": food["sugar_content"]
+            }
+            display_foods.append(display_food)
+            
+        return foods, display_foods  
+        
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return [], []
+
 
 def find_calorie(food_item):
-    template = """What is the calorie content of {food_item}? I just want the numbers and no text.
-    If there are multiple foods, give the calories of each and the total as well, with the foods bulleted 
-    one below the other. Ignore any time information, just mention the calories."""
-    
+    template = "What is the calorie content of {food_item}? Provide only the numeric value."
     prompt = PromptTemplate(template=template, input_variables=["food_item"])
-
     try:
         model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
-        llm_chain = LLMChain(llm=model, prompt=prompt)
-        return llm_chain.run(food_item=food_item)
-    
+        chain = LLMChain(llm=model, prompt=prompt)
+        result = chain.run(food_item=food_item)
+        # Clean the result to get only numeric value
+        return result.strip()
     except Exception as e:
-        st.error(f"Error generating calorie content: {e}")
+        st.error(f"Error: {e}")
         return None
-
+    
 
 def extract_calories(food_item):
     date = datetime.now().strftime("%d/%m/%Y")
     
-    template = """What is the calorie content of {food_item} just the food ignore the time? I want the name of the food and 
-    calorie content in the form of a dictionary. Today's date is {date}, change the date according to the context with respect to 
-    today's date and write it in DD/MM/YYYY format Example: 
-    [{{"date":"DD/MM/YYYY", "item": "Apple", "calories": 95,"Suger content": 10 mg,"Carbs: " 20 mg, "Protein":15 mg, "fat" : 30 mg}}, 
-    {{"date":"DD/MM/YYYY", "item": "Banana", "calories": 105, "Suger content": 30 mg,"Carbs: " 200 mg, "Protein":15 mg, "fat" : 13 mg}}]."""
+    # Modified template to ensure numeric values without units in JSON
+    template = """
+    I want the calorie content, carbohydrates, proteins, fats, and sugar content of {food_item}.
+    Today's date is {date}. Provide ONLY the JSON data in this exact format, using NUMBERS WITHOUT UNITS:
+    {{
+        "date": "{date}",
+        "item": "{food_item}",
+        "calories": in mg,
+        "sugar_content": in mg,
+        "carbs": in mg,
+        "protein": in mg,
+        "fat": in mg
+    }}
+    """
     
-    prompt = PromptTemplate(template=template, input_variables=["food_item", "date"])
+    prompt = PromptTemplate(
+        template=template,
+        input_variables=["food_item", "date"]
+    )
 
     try:
         model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
         llm_chain = LLMChain(llm=model, prompt=prompt)
         result = llm_chain.run(food_item=food_item, date=date)
 
+        # Clean the response before parsing
+        result = result.strip()
+        
+        # Log raw response for debugging
         st.write("Raw AI Response:", result)
+        
+        # Parse JSON response
         food_data = json.loads(result)
+        
+ 
+        numeric_fields = ["calories", "sugar_content", "carbs", "protein", "fat"]
+        for field in numeric_fields:
+            if not isinstance(food_data[field], (int, float)):
+                raise ValueError(f"{field} must be a number")
+                
         return food_data
     
-    except json.JSONDecodeError:
-        st.error("Error parsing AI response. Ensure the response is in the correct JSON format.")
+    except json.JSONDecodeError as e:
+        st.error(f"Error parsing AI response: {str(e)}")
+        st.write("Problematic response:", result)
     except Exception as e:
-        st.error(f"Error during model execution: {e}")
+        st.error(f"Error during model execution: {str(e)}")
+    
     return None
 
 
-def add_to_mongo(food_data):
-    try:
-        collection.insert_many(food_data)
-        st.success("Food data added to database.")
-    except Exception as e:
-        st.error(f"Error inserting data into MongoDB: {e}")
 
+def calculate_daily_totals(foods):
+    totals = {
+        "total_calories": 0,
+        "total_carbs": 0,
+        "total_protein": 0,
+        "total_fat": 0,
+        "total_sugar": 0
+    }
+    
+    for food in foods:
+        try:
+            
+            def extract_number(value):
+                if isinstance(value, (int, float)):
+                    return float(value)
+                elif isinstance(value, str):
+                    
+                    return float(''.join(c for c in value if c.isdigit() or c == '.'))
+                return 0
 
-def get_consumed_foods():
-    try:
-        today = datetime.now().strftime("%d/%m/%Y")
-        return list(collection.find({"date": today}, {"_id": 0})) 
-    except Exception as e:
-        st.error(f"Error retrieving data from MongoDB: {e}")
-        return []
+            totals["total_calories"] += extract_number(food["calories"])
+            totals["total_carbs"] += extract_number(food["carbs"])
+            totals["total_protein"] += extract_number(food["protein"])
+            totals["total_fat"] += extract_number(food["fat"])
+            totals["total_sugar"] += extract_number(food["sugar_content"])
+                    
+        except (ValueError, KeyError) as e:
+            st.warning(f"Skipping invalid entry: {food.get('item', 'unknown food')}")
+            continue
+    
+    return totals
 
 
 def nutritionist():
-    st.title("Personal AI Nutritionist")
+    st.title("Nutritionist")
+    
+    if "user_email" not in st.session_state:
+        st.warning("Please log in first.")
+        return
 
-    st.subheader("Enter Food Item")
-    food_input = st.text_input("Enter the food and quantity:", placeholder="e.g., 1 apple, 200g rice").strip()
+    user_email = st.session_state["user_email"]
+    st.write(f"Logged in as: {user_email}")
 
-    col_left, col_right = st.columns([1, 1])
-    with col_left:
-        if st.button("Find"):
-            if food_input:
-                result = find_calorie(food_input)
+    st.subheader("Log your food items")
+    food_item = st.text_input("Enter food item with quantity (e.g., '100g rice' or '1 apple')")
+
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Find Calories"):
+            if food_item:
+                result = find_calorie(food_item)
                 if result:
-                    st.write("Calorie Content:", result)
-                else:
-                    st.warning("Could not retrieve calorie information.")
-            else:
-                st.warning("Please enter a valid food item.")
-
-    with col_right:
-        if st.button("Ate"):
-            if food_input:
-                dict_result = extract_calories(food_input)
-                if dict_result:
-                    add_to_mongo(dict_result)
-                    st.success(f"Added: {dict_result}")
-                else:
-                    st.warning("Could not retrieve calorie information.")
-            else:
-                st.warning("Please enter a valid food item.")
+                    st.write("Calories:", result)
+    
+    with col2:
+        if st.button("Add to Consumed List"):
+            if food_item:
+                data = extract_calories(food_item)
+                if data:
+                    add_to_mongo(data, user_email)
 
     st.subheader("Today's Consumed Foods")
-    consumed_foods = get_consumed_foods()
-    if consumed_foods:
-        total_calories = sum(food['calories'] for food in consumed_foods)
-        data = [{"Date": food['date'], "Food Item": food['item'], "Calories": food['calories']} 
-                for food in consumed_foods]
-        data.append({"Date": "", "Food Item": "Total", "Calories": total_calories})
-        st.table(data)
+    foods_data, display_foods = get_consumed_foods(user_email)
+    
+    if display_foods:  
+        
+        st.table(display_foods)
+        
+        try:
+            totals = calculate_daily_totals(foods_data)
+            st.subheader("Daily Totals")
+            st.write(f"Total Calories: {totals['total_calories']:.1f} kcal")
+            st.write(f"Total Carbs: {totals['total_carbs']:.1f} g")
+            st.write(f"Total Protein: {totals['total_protein']:.1f} g")
+            st.write(f"Total Fat: {totals['total_fat']:.1f} g")
+            st.write(f"Total Sugar: {totals['total_sugar']:.1f} g")
+        except Exception as e:
+            st.error(f"Error calculating totals: {str(e)}")
+
     else:
-        st.write("No food items consumed yet.")
+        st.write("No foods logged today.")
