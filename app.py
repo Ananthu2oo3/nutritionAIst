@@ -16,12 +16,25 @@ def app():
         st.session_state.user_email = ""
 
     # Check login state
+    # if not st.session_state.logged_in:
+    #     auth_option = st.sidebar.radio("Choose", ["Log In", "Sign Up"])
+    #     if auth_option == "Log In":
+    #         login()
+    #     elif auth_option == "Sign Up":
+    #         sign_up()
+
     if not st.session_state.logged_in:
         auth_option = st.sidebar.radio("Choose", ["Log In", "Sign Up"])
         if auth_option == "Log In":
-            login()
+            if login():  
+                st.session_state.logged_in = True
+                st.experimental_rerun()  
         elif auth_option == "Sign Up":
-            sign_up()
+            if sign_up():  
+                st.session_state.logged_in = True
+                st.experimental_rerun()
+
+
     else:
         option = st.sidebar.radio("Navigate", ["Dashboard", "Nutritionist", "Food Quality","Log Out"])
 

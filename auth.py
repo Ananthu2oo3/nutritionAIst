@@ -141,3 +141,4 @@ def login():
         st.session_state["username"] = user["username"]
         st.session_state["user_email"] = user["email"]
         st.success(f"Welcome back, {user['username']}!")
+        

@@ -11,7 +11,7 @@ from july.utils import date_range
 from nutrition import calculate_daily_totals, get_consumed_foods
 
 # Load environment variables
-load_dotenv(dotenv_path="/home/ananthu/machine_learning/nutrition_AI/.env")
+load_dotenv(dotenv_path=".env")
 
 # MongoDB setup
 MONGO_CLIENT = os.getenv("MONGO_CLIENT")
@@ -26,9 +26,35 @@ food_collection = db[FOOD_COLLECTION]
 
 
 def dashboard():
+    # # Ensure the user is logged in
+    # if "user_email" not in st.session_state:
+    #     st.warning("Please log in first.")
+    #     return
+
+
+    # records = food_collection.find({"user_email": user_email})
+    # new_user = pd.DataFrame(records)
+
+    # # Check if data is empty
+    # if new_user.empty:
+    #     st.info("No food data available. Start logging your meals!")
+    #     return
+
     # Ensure the user is logged in
-    if "user_email" not in st.session_state:
+    if "user_email" not in st.session_state or not st.session_state.user_email:
         st.warning("Please log in first.")
+        return
+
+    # Access user_email from session state
+    user_email = st.session_state.user_email
+
+    # Retrieve data based on the user's email
+    records = food_collection.find({"user_email": user_email})
+    new_user = pd.DataFrame(records)
+
+    # Check if data is empty
+    if new_user.empty:
+        st.info("No food data available. Start logging your meals!")
         return
 
     # Fetch user profile and food data
